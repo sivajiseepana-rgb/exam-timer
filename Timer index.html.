@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Board Exam Countdown & Alerts</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card: #1e293b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --danger: #ef4444;
+      --success: #22c55e;
+    }
+
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      margin: 0;
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 650px;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    h1 { margin: 0 0 8px; font-size: 1.8rem; }
+    p { margin: 0; color: var(--muted); }
+
+    .controls, .add-form {
+      background: var(--card);
+      padding: 16px;
+      border-radius: 12px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    input {
+      flex: 1;
+      min-width: 160px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: var(--text);
+      font-size: 0.95rem;
+    }
+
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.2s;
+    }
+
+    button:hover { opacity: 0.9; }
+    .btn-primary { background: var(--accent); color: #0f172a; }
+    .btn-notify { background: var(--success); color: #0f172a; }
+    .btn-test { background: #334155; color: var(--text); }
+    .btn-delete { background: var(--danger); color: white; padding: 6px 10px; font-size: 0.8rem; }
+
+    .exam-card {
+      background: var(--card);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 14px;
+      border-left: 5px solid var(--accent);
+    }
+
+    .exam-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .exam-title { font-size: 1.25rem; font-weight: 700; }
+    .exam-date { font-size: 0.85rem; color: var(--muted); }
+
+    .timer-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      text-align: center;
+    }
+
+    .time-box {
+      background: #0f172a;
+      padding: 10px 6px;
+      border-radius: 8px;
+    }
+
+    .time-val { font-size: 1.5rem; font-weight: 800; color: var(--accent); }
+    .time-label { font-size: 0.75rem; color: var(--muted); text-transform: uppercase; }
+    .status-done { color: var(--success); font-weight: 700; text-align: center; padding: 10px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Board Exam Countdown</h1>
+      <p>Track your exam sessions and get instant alerts</p>
+    </header>
+
+    <!-- Notification Controls -->
+    <div class="controls">
+      <button class="btn-notify" onclick="enableNotifications()">Enable Notifications</button>
+      <button class="btn-test" onclick="sendTestNotification()">Test Alert</button>
+      <span id="permStatus" style="align-self:center; font-size:0.85rem; color:#94a3b8;"></span>
+    </div>
+
+    <!-- Add Exam Form -->
+    <form class="add-form" onsubmit="addExam(event)">
+      <input type="text" id="subjectInput" placeholder="Subject (e.g., Physics Board)" required />
+      <input type="datetime-local" id="dateInput" required />
+      <button type="submit" class="btn-primary">+ Add Exam</button>
+    </form>
+
+    <!-- Exam List -->
+    <div id="examList"></div>
+  </div>
+
+  <script>
+    // Load saved exams from localStorage
+    let exams = JSON.parse(localStorage.getItem("boardExams")) || [];
+
+    function saveExams() {
+      localStorage.setItem("boardExams", JSON.stringify(exams));
+    }
+
+    function updatePermissionText() {
+      const statusEl = document.getElementById("permStatus");
+      if (!("Notification" in window)) {
+        statusEl.textContent = "Notifications not supported in this preview.";
+      } else {
+        statusEl.textContent = `Alert Status: ${Notification.permission.toUpperCase()}`;
+      }
+    }
+
+    function enableNotifications() {
+      if (!("Notification" in window)) {
+        alert("Open this site in Chrome/Safari (hosted via HTTPS) to use notifications.");
+        return;
+      }
+      Notification.requestPermission().then(() => updatePermissionText());
+    }
+
+    function triggerNotification(title, body) {
+      if ("Notification" in window && Notification.permission === "granted") {
+        new Notification(title, { body });
+      }
+    }
+
+    function sendTestNotification() {
+      if (Notification.permission !== "granted") {
+        alert("Click 'Enable Notifications' first!");
+        return;
+      }
+      triggerNotification("Board Exam Tracker", "Notifications are working! Stay focused.");
+    }
+
+    function addExam(e) {
+      e.preventDefault();
+      const subject = document.getElementById("subjectInput").value.trim();
+      const dateStr = document.getElementById("dateInput").value;
+      if (!subject || !dateStr) return;
+
+      exams.push({
+        id: Date.now(),
+        subject,
+        targetTime: new Date(dateStr).getTime(),
+        notified1Day: false,
+        notifiedStart: false
+      });
+
+      // Sort earliest exam first
+      exams.sort((a, b) => a.targetTime - b.targetTime);
+      saveExams();
+      e.target.reset();
+      renderTimers();
+    }
+
+    function deleteExam(id) {
+      exams = exams.filter(exam => exam.id !== id);
+      saveExams();
+      renderTimers();
+    }
+
+    function renderTimers() {
+      const list = document.getElementById("examList");
+      const now = Date.now();
+
+      if (exams.length === 0) {
+        list.innerHTML = `<p style="text-align:center; padding:20px;">No exams added yet. Add your first subject above!</p>`;
+        return;
+      }
+
+      list.innerHTML = exams.map(exam => {
+        const diff = exam.targetTime - now;
+        const formattedDate = new Date(exam.targetTime).toLocaleString();
+
+        // Trigger 24-hour reminder once
+        if (diff > 0 && diff <= 86400000 && !exam.notified1Day) {
+          exam.notified1Day = true;
+          saveExams();
+          triggerNotification(`24 Hours Left: ${exam.subject}`, "Final revision time! Check your admit card and stationery.");
+        }
+
+        // Trigger Exam Start notification once
+        if (diff <= 0 && !exam.notifiedStart) {
+          exam.notifiedStart = true;
+          saveExams();
+          triggerNotification(`Exam Session Starting: ${exam.subject}`, "All the best for your board exam!");
+        }
+
+        if (diff <= 0) {
+          return `
+            <div class="exam-card" style="border-left-color: var(--success);">
+              <div class="exam-header">
+                <div>
+                  <div class="exam-title">${exam.subject}</div>
+                  <div class="exam-date">${formattedDate}</div>
+                </div>
+                <button class="btn-delete" onclick="deleteExam(${exam.id})">Remove</button>
+              </div>
+              <div class="status-done">Exam Session Started / Completed!</div>
+            </div>
+          `;
+        }
+
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
+        const minutes = Math.floor((diff / 1000 / 60) % 60);
+        const seconds = Math.floor((diff / 1000) % 60);
+
+        return `
+          <div class="exam-card">
+            <div class="exam-header">
+              <div>
+                <div class="exam-title">${exam.subject}</div>
+                <div class="exam-date">${formattedDate}</div>
+              </div>
+              <button class="btn-delete" onclick="deleteExam(${exam.id})">Remove</button>
+            </div>
+            <div class="timer-grid">
+              <div class="time-box"><div class="time-val">${days}</div><div class="time-label">Days</div></div>
+              <div class="time-box"><div class="time-val">${hours}</div><div class="time-label">Hours</div></div>
+              <div class="time-box"><div class="time-val">${minutes}</div><div class="time-label">Mins</div></div>
+              <div class="time-box"><div class="time-val">${seconds}</div><div class="time-label">Secs</div></div>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    updatePermissionText();
+    renderTimers();
+    setInterval(renderTimers, 1000);
+  </script>
+</body>
+</html>
+
+
